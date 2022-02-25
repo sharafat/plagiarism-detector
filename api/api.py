@@ -38,7 +38,7 @@ def login():
 
 
 @app.route("/api/refresh-token", methods=["POST"])
-@jwt_required(refresh=True)
+@jwt_required()
 def refresh():
     identity = get_jwt_identity()
     access_token = create_access_token(identity=identity)
@@ -47,7 +47,7 @@ def refresh():
 
 @app.route("/api/documents", methods=["GET"])
 @jwt_required()
-def protected():
+def documents():
     user_id = get_jwt_identity()
     documents_result = db.select("SELECT * FROM documents WHERE created_by = ? ORDER BY id DESC", (user_id,))
     documents = []
@@ -60,3 +60,26 @@ def protected():
             'created_at': row['created_at'],
         })
     return jsonify(documents), 200
+
+
+@app.route("/api/documents/check", methods=["POST"])
+@jwt_required()
+def check():
+    document = request.form.get("text")
+    file = request.files.get("file")
+    if document == "" and file is None:
+        return jsonify({"error": "text/file is required."}), 422
+
+    if file is not None:
+        document = file.read().decode("utf-8")
+
+    title = file.filename if file is not None else document[:20]
+    matching_probability = 0.0
+    created_by = get_jwt_identity()
+
+    db.insert(
+        "INSERT INTO documents (title, document, matching_probability, created_by) VALUES (?, ?, ?, ?)",
+        (title, document, matching_probability, created_by)
+    )
+
+    return jsonify({"matching_probability": matching_probability}), 200

@@ -5,6 +5,7 @@ import './App.css';
 
 import LoginPage from "./views/LoginPage/LoginPage.jsx";
 import HomePage from "./views/HomePage/HomePage.jsx";
+import CheckDocumentPage from "./views/CheckDocumentPage/CheckDocumentPage.jsx";
 
 function App() {
 
@@ -15,6 +16,7 @@ function App() {
                     <Routes>
                         <Route path="/" element={<LoginPage/>}/>
                         <Route path="/home" element={<HomePage/>}/>
+                        <Route path="/check" element={<CheckDocumentPage/>}/>
                     </Routes>
                 </BrowserRouter>
             </header>
