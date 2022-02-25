@@ -49,4 +49,14 @@ def refresh():
 @jwt_required()
 def protected():
     user_id = get_jwt_identity()
-    return jsonify(logged_in_as=user_id), 200
+    documents_result = db.select("SELECT * FROM documents WHERE created_by = ? ORDER BY id DESC", (user_id,))
+    documents = []
+    for row in documents_result:
+        documents.append({
+            'id': row['id'],
+            'title': row['title'],
+            'document': row['document'],
+            'matching_probability': row['matching_probability'],
+            'created_at': row['created_at'],
+        })
+    return jsonify(documents), 200
