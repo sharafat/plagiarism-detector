@@ -1,0 +1,185 @@
+2018 IEEE International Conference on Big Data (Big Data)
+
+Improving Query Execution Performance in Big Data using Cuckoo Filter
+
+
+Sharafat Ibn Mollah Mosharraf
+Bangladesh University of Engineering & Technology
+Dhaka, Bangladesh sharafat 8271@yahoo.co.uk
+
+Muhammad Abdullah Adnan
+Bangladesh University of Engineering & Technology Dhaka, Bangladesh adnan@cse.buet.ac.bd
+
+
+
+
+
+Abstract—Performance is a critical concern when reading and writing billions of records stored in a Big Data warehouse. To improve performance, Big Data systems utilize the Eventual Consistency model as well as a probabilistic data structure called Bloom Filter. In recent times, cost minimization and privacy concerns have led Big Data systems to regularly delete data besides reading and writing. Bloom Filter has an important limitation of not supporting deletion of elements from within it. This limitation along with constraints of the Eventual Consistency model prevents the system to delete data from disk immediately upon an execution of a DELETE command. Rather data is actually deleted during a compaction process, which is executed very infrequently due to it being resource-intensive. During the time between data deletion and compaction (typically a few days), lookup queries fetch records from disk that includes the deleted rows, then detect and remove the deleted records from the returning result set. This leads to poor query execution performance. In this paper, we propose a scheme to improve performance of lookup queries after data deletion by replacing Bloom Filter with a better probabilistic data structure called Cuckoo Filter that supports deletion  of  elements  from  within it. We evaluate our proposed scheme using a popular Big Data database (Cassandra) that uses both the Eventual Consistency model and Bloom Filter, and show that performance of lookup queries executed after data deletion can improve for up to 100%. We also show that our scheme does not degrade performance of other data manipulation queries as a side effect.
+Index Terms—Big Data, Query Optimization, Probabilistic Data Structure, Bloom Filter, Cuckoo Filter.
+
+I.	INTRODUCTION
+Big Data systems provide efficient querying of very large amount of data - typically millions to billions of records. While the query performance is better than typical database systems, it is still not very pleasing to end users. For example, Facebook data warehouse has 300 petabytes of data, and a single query processing can take even 350 seconds [1].
+Disk access is the primary factor in degrading query per- formance, and many hardware solutions as well as software techniques have been invented to improve disk access per- formance. While hardware improvements are cost-prohibitive, most of the software solutions lack storage or performance effi- ciency. Probabilistic Filter is an interesting software technique that improves query performance by avoiding unnecessary disk accesses, while having extremely low memory footprint requirement and providing extremely fast lookup service. A probabilistic filter supports set membership queries in such a
+
+
+way that querying a set may result in false positives (claiming an element to be part of the set when it was not inserted),    but never in false negatives (reporting an inserted element     to be absent from the set when it is actually present). The  most popular probabilistic filter out there  is  Bloom  Filter  [2], which is also being used in many popular Big Data systems like Google BigTable [3], Apache HBase [4] and Apache Cassandra [5]. An important limitation of the Bloom Filter is that data cannot be deleted from it [6]. Whereas,    data deletion is a regular  operation  in  Big  Data  systems  due to cost minimization, privacy issues and effective data analytics [7]. Recently, this limitation of Bloom Filter has been addressed efficiently by another probabilistic filter named Cuckoo Filter [6].
+Big Data systems that offer high-performance query execu- tion usually utilize Bloom Filters along with Eventual Con- sistency model for performance improvement. In the Eventual Consistency model, data deleted is not removed from disk storage and rather updated with a deletion marker timestamp called a Tombstone. The data is eventually deleted during a data compaction process. This data compaction process takes  a lot of CPU resource and has other overheads due to which it is scheduled to occur very infrequently (commonly every few days). This time interval between tombstoning and compaction is called a grace period. During the grace period, any lookup query must access disks and retrieve the data only to find out that the data has been deleted. Therefore, while the model improves performance, it fails to do so for the  case  where data deletion is a regular occurrence.
+We propose a scheme to improve performance of lookup queries after data deletion by replacing Bloom Filter with Cuckoo Filter that allows deletion of entries from within it. There are a few challenges in implementing this scheme, which we also address properly. We then show that lookup queries after data deletion can improve performance for up    to 100% using our proposed scheme. We also show that our scheme does not cause performance degradation as a side effect for any lookup or insertion queries whatsoever beyond the case of lookup queries after deletion.
+The rest of this paper is organized as follows. Section II provides some background information on Big Data systems and optimizing query execution performance on those systems. Section III provides an overview of researches in concepts
+
+related to our scheme. Section IV presents our scheme and  the challenges in implementing it. In Section V, we describe our experiment setup with Cassandra, and show the result of evaluation of our proposed scheme and related cases. Finally, we conclude in Section VI.
+II.	BACKGROUND
+Disk access overhead is the primary bottleneck of querying in a database. Many hardware and software based techniques have been invented to improve disk access performance or re- duce disk access overhead. Solid-state drives have been shown to improve disk access performance by two-fold compared    to magnetic hard disk drives, but the cost increases about
+2.5 times along with it. Caching all data in RAM speeds up query performance tremendously, but for Big Data databases, it quickly becomes cost prohibitive. Database Indexing is a common technique that improves data retrieval performance, but at the cost of extra writes and storage space to maintain the data structure. It does improve data retrieval performance for up to 2,000 times [8], but then data insertion, update and deletion performance can get decreased down to 1/1,000 times [9]. Also, the storage space an index takes is not little (the tiniest index for a single column can take at least 1.3 GB        of memory for 100M rows in a table). Another technique to improve performance is using a Probabilistic Filter. The filter can be queried efficiently before accessing disk to know if    the disk contains records matching the query. Thus, a lot of unnecessary disk accesses can be prevented using it.
+Bloom Filter [2] is the most popular probabilistic filter because of its simple design, high performance and extremely small memory footprint. It is being used in Big Data systems in various ways to improve data lookup performance. For example, popular Big Data systems like Google BigTable [3] and Apache Cassandra [5] use it to minimize disk lookups.    It has been integrated into the MapReduce system of HBase and Hadoop [4] and shown that the performance of  the  system dramatically improves [10]. Though Bloom Filter has an extremely low memory footprint, it is prone to high false positive rate under high load, and it does not allow deletion from the set without introducing false negatives [11] [6].
+Cuckoo Filter  [6] has been recently proposed and shown   to be a better filter than Bloom in terms of performance, false-positive rate and storage space. It utilizes a Cuckoo Hash
+[12] as its underlying data structure. It has the advantages of supporting Delete and Count operations without introducing false negatives. It can also maintain a stable false positive rate with load up to 95% [6].
+III.	RELATED WORKS
+The technique of probabilistic filters was first published by
+B. H. Bloom [2]. Though having an extremely small memory footprint, Bloom Filter has the disadvantages of not supporting count and deletion operations on items in the filter. Several variations of Bloom Filter have been proposed to address these issues. Counting Bloom Filter [13] brings support for count and deletion operations, but it takes about four times more
+
+memory than a regular Bloom Filter; and in some scenarios,   it can introduce false-negatives during deletion operation [11]. Bloom Filter variations that base on Counting Bloom Filter, like d-Left Counting Bloom Filter [14], optimize memory footprint, but cannot address the false-negative issue. Deletable Bloom Filter [15] solves the false-negative issue, but at the expense of higher false-positive rate that severely constrains element deletability. Many other variations of Bloom Filter have been proposed (see [16] for a comprehensive list), but none addresses all the issues of Bloom Filter altogether.
+More recently, Bin Fan and others proposed Cuckoo Fil-  ter [6] that supports count and deletion operations, does not introduce false negatives during deletion operation, has fewer
+bits per entry for optimum false positive rate (< 3%), and can
+maintain stable false positive rate with higher load for up to 95%. After its introduction, recently, several research works have used Cuckoo Filter to speed up the lookup  process in  the areas of Networking and Security [17] [18] [19] [20] [21]. However, there have not been significant researches utilizing Cuckoo Filter in the area of Big Data — only a few on semi- structured data [22], encrypted data [23] and dynamic data- sets [24].
+Cuckoo Filter has a drawback that during insertion, more items may need to be kicked out and placed into alternate buckets, increasing the insertion time. And if exhausted, the filter needs to be resized. Researches have been carried out to devise variations of Cuckoo Filter or Cuckoo Hash that can be used to reduce the insertion time. SmartCuckoo [25] efficiently predetermines insertion failures without paying a high cost of carrying out step-by-step probing. A. Kirsch et al. [26] showed that the failure probability can be dramatically reduced by the addition of a very small constant-sized stash.
+There exist other variations that improve upon Cuckoo Filter. Adaptive Cuckoo Filter [27] is able to significantly reduce the false positive rate by reacting to false positives, removing them for future queries. Resizing a Cuckoo Filter dynamically with efficient memory and space utilization can be done using Dynamic Cuckoo Filter [24]. For storage-critical cases, D-Ary Cuckoo Filter [28] can save up to one bit per element, though at the cost of increased lookup and insertion performance.
+In this paper, we utilize the deletability feature of Cuckoo Filter and propose a methodology where querying for data after deletion can improve query execution performance.
+IV.	PROPOSED METHOD
+We first describe the scenario where existing Big Data systems fail to improve query performance. Then we propose our scheme to overcome the limitation. Finally, we state the challenges that we encounter while implementing the proposed scheme and discuss solutions to overcome those.
+A.	Query Performance Degradation in Case of Data Lookup After Deletion in Existing Big Data Systems
+Bloom Filter has the limitation that it does not allow deletion of items from within it. Combined with the Eventual
+
+Consistency model, this limitation degrades performance sig- nificantly for queries looking up data after it has been deleted. The following scenario demonstrates the significance of the issue.
+1)	When a client deletes a row, instead of actually removing the data from storage, the Big Data database updates the row to add a tombstone marker. The Bloom Filter keeps the row key though, as the key cannot be deleted from the filter.
+2)	Before the database system runs a storage compaction procedure to actually remove the data (which can be up to a few days later), a client queries with row keys that include the key for the deleted row. Now, Bloom Filter will suggest that the row data exists on disk, as it has the key still stored in it.
+3)	The database system will  read  the  disk  storage  only to find out that the row data has been marked with a tombstone and hence removes the row from the resultant set of rows to be returned to the client. This unnecessary storage access increases query execution time signifi- cantly and hence degrades query performance.
+
+B.	Proposed Scheme to Improve Performance of Lookup Query After Deletion
+We propose a scheme that replaces Bloom Filter with Cuckoo Filter that allows deletion from the filter. Following   is an illustrative scenario of how the proposed scheme works and improves performance.
+1)	A client makes a row deletion query. The query is executed exactly the way executed by the current system, that is, data on disk is marked with a tombstone. We do not propose instant deletion of data and instead propose utilizing the existing tombstoning technique, because data deletion is a very expensive operation that should not be done very frequently.
+2)	The corresponding row key is deleted from the Cuckoo Filter associated with the row data deleted.
+3)	The Cuckoo Filter is subsequently flushed into disk to persist the change in it. To make sure the flushing of the filter is handled robustly in a fail-safe way and creates minimal overhead, we propose using Adaptive Cuckoo Filter [27], a variant of Cuckoo Filter that removes keys resulting in false positives from itself. Section IV-C2 expands upon the issue in detail.
+4)	Afterwards, during a lookup query, the key will not be found in the filter and hence a costly disk access oper- ation can be avoided, thereby improving performance.
+
+C.	Modifications of Cuckoo Filter to Implement Proposed Scheme
+Replacing Bloom Filter with Cuckoo Filter creates new challenges to make the proposed scheme work properly in        a fail-safe manner. In this section we discuss the challenges and propose solutions to overcome those.
+
+
+
+
+Fig. 1. Failure of Database System to infer correct result with our proposed scheme applied, in the case where Consistency Level requirement > 1.
+
+
+1)	When consistency level requirement is more than one node: As Eventual Consistency model is a weak consistency model designed to improve performance, Big Data systems employing it usually provide an option to increase confidence in data consistency as may be required  by  clients.  It  is  worth mentioning here that clients requiring strong consistency should not use Big Data systems that utilize Eventual Consis- tency; however, there may be cases where a client may not require strong consistency for most of the data, but a particular table/data may be required to maintain greater consistency than the rest.
+To specify consistency level requirement, Big Data systems usually provide the option for a query to specify its require- ment of consistency level. If there are multiple replicas of a node, a query can ask for higher consistency level of data and the system then executes the same query on multiple nodes and converge the results based on update timestamp to make sure the latest data is returned. Now, let us consider the following scenario for a cluster of two nodes (one being a replica of the other) with our proposed method implemented in place.
+1)	Data is deleted from Node 1. The corresponding key is also deleted from the filter. Node 2 has not been updated with the changes yet.
+2)	A lookup query is executed with consistency level requirement of 2, that is, two nodes should be compared to find the latest data. The Big Data system will try to converge data from both nodes and see that the former has no data (because the filter says so) while the latter has data, and will conclude that the data in Node 2 is the latest one, which is clearly wrong. The system derives this conclusion based on comparing update timestamps of the data returned from the nodes, and for the former node, there is no data while the latter one has data with timestamp, which is considered the latest timestamp by the system (Fig. 1).
+This can be handled properly by using a modified version  of Cuckoo Filter where it will not only respond with whether a key is stored in it or not, but also whether a key in it has been deleted. Thus we can also modify the behavior of the Big Data system to detect this case where consistency level requirement is greater than 1, and let it access the disk to retrieve the row data so that when the timestamps of the data from both the
+
+
+
+
+Fig. 2. Modifying the behavior of Cuckoo Filter makes sure the Database System infers correct result with our proposed scheme applied, in the case where Consistency Level requirement > 1.
+
+
+nodes are compared, the system will find the row deletion timestamp to be later than the row creation timestamp and conclude the latest state to be the row deletion, which is the expected result. Following is an illustration of the operations of the modified proposed scheme.
+1)	A client makes a row deletion query. The query is executed exactly the way executed by the current system, that is, data on disk is marked with a tombstone.
+2)	The corresponding row key is deleted from the Cuckoo Filter associated with the row data deleted. At the same time, the Cuckoo Filter now maintains a list of deleted keys, and the key is entered into the deleted key list.
+3)	The Cuckoo Filter is subsequently flushed into disk to persist the change in it. The change in data has not been propagated to the other nodes yet.
+4)	A lookup query is executed with consistency level requirement of 1, that is, a single node’s data will suffice
+- no convergence of data from multiple nodes needs to be carried out. In this case, the filter will respond that the key is deleted and the database system will avoid   the costly disk access operation; resulting in improved query performance.
+5)	Now, suppose a lookup query is executed with consis- tency level requirement of 2, that is, two nodes should be compared to find the latest data. The system now detects this and finds the filter responding that the data is deleted. In this case, the system still reads the data and returns the row. The result from two nodes will be converged by the system and as the deleted row will contain the tombstoned timestamp which is the latest  timestamp, the system will remove it from the resulting rows of data (Fig. 2).
+2) If flushing the updated filter fails after data deletion: Once a key is deleted from the filter, if flushing the filter into disk storage fails, due to for example crashing of node, then the key will come back into the filter once the node recovers. This will hinder performance improvement of subsequent lookup queries against this key. The following scenario illustrates this point.
+1)	Data is marked with tombstone and deleted from filter.
+2)	The filter is scheduled to be flushed into disk.
+
+3)	The node crashes before the filter is flushed into disk, and later recovers.
+4)	Now the data is tombstoned, but the filter also contains the data. Our proposed method will not gain any perfor- mance benefit for that deleted data.
+The proper way to ensure reliable updating of filter is using a journaling method to log changes in filter before it is flushed and replaying the log in case the filter fails to get flushed successfully. However, it is a complex process that also has performance overhead.
+A rather simpler and more efficient technique would be using the Adaptive Cuckoo Filter variant [27], which removes false positives from the filter once detected. So, in this case, once a lookup query finds out that a row key exists in the  filter but the row data is tombstoned, it gives the feedback to the Adaptive Cuckoo Filter and it removes the row key from within it.
+
+V.	EXPERIMENTATION
+A.	Experiment Setup
+Most Big Data systems currently in use employ Eventual Consistency as well as Bloom Filters. Eventual Consistency   is a popular choice because it allows faster read/write op- erations, and Bloom Filter plays a vital role in improving query execution performance by avoiding disk access in the case where data do not exist on disk. Examples of popular   Big Data systems incorporating these features include Google BigTable [3], Apache HBase [4] and Apache Cassandra [5]. Among these, we choose Cassandra to be our experimental  Big Data system. The driving factors for choosing Cassandra are as follows.
+1)	Apache Cassandra is a free and open-source distributed Wide-Column-Store NoSQL database management sys- tem designed to handle large amounts of data across many commodity servers, providing high availability with no single point of failure1. Cassandra offers robust support for clusters spanning multiple datacenters [29] with asynchronous masterless replication allowing low latency operations for all clients1.
+2)	It is the most popular Column-Store Big Data database as of Nov. 2018 according to DB-Engines ranking2.
+3)	The source code of Cassandra is organized and clean. Also, querying the database is very simple syntac- tically and programmatically compared to other Big Data databases, along with having performance tracing feature built-in.
+We forked the Cassandra source code repository into our own repository on Github3 and plugged an open-source im- plementation of Cuckoo Filter4 into it. We made necessary changes according to our proposed methodology.
+
+1https://en.wikipedia.org/wiki/Apache Cassandra
+
+2https://db-engines.com/en/ranking/wide+column+store 3https://github.com/sharafat/cassandra
+4https://github.com/MGunlogson/CuckooFilter4J
+
+
+
+
+Fig. 3. Lookup performance after deletion. Cuckoo Filter improves perfor- mance for up to 100%.
+
+
+We compiled the  source  code  and  ran  our  experiments  in a real Big Data environment set up on Amazon Web Services (AWS) cloud computing system. The AWS node where Cassandra had been set up was an m5.xlarge EC2 instance - 2.5 GHz Intel Xeon Platinum 8175 processor with   4 virtual CPUs, 16 GB RAM and 200 GB io1 EBS volume with 10,000 IOPS, having up to 3,500 Mbps dedicated EBS bandwidth.
+As for a real-world experiment dataset, we chose to use Amazon Customer Reviews dataset ( 136M records, 50GB total data size) that is available publicly5. We inserted the dataset into our Cassandra instance using the built-in CQLSH tool for data manipulation.
+We developed a program in Java6 to connect to our Cassan- dra instance, execute queries and collect execution time.
+B.	Experimental Results
+In Section V-B1, we evaluate the performance of our proposed method. To show that the core change proposed in our method, that is, replacing the Bloom Filter with Cuckoo Filter, does not degrade performance of Cassandra, we mea- sure lookup and insertion query performances in general and present the result of our evaluation in Sections V-B2 and V-B3.
+1)	Lookup Performance After Deletion: From Fig. 3 we see that allowing deletion in filter improves query execution per- formance significantly (in this particular instance for 99.96%) for querying data that have been deleted. This leads to the conclusion that the more query results in empty result, the faster the query executes. We have also done an experiment that proves this conclusion is correct. Fig. 4 shows the query execution times where fraction of queries look up keys that have their data deleted. We can see that when none of the queries contain keys that have been deleted, that is, fraction of deleted data queries is 0%, the performance is almost identical. The more the fraction of queries look up keys having their data deleted, the better performance becomes; up to the point where query execution time comes down to few milliseconds from many seconds, yielding almost 100% performance gain.
+It should be noted here that in case of Bloom Filter, along with increase in fraction of deleted data queries, the query
+5https://registry.opendata.aws/amazon-reviews
+6https://github.com/sharafat/cuckoo-filter-performance-analyzer
+
+
+Fig. 4. Lookup performance after deletion for varying percentage of queries returning deleted data. Cuckoo Filter improves performance for up to 100%.
+
+
+Fig. 5. Lookup performance after deletion for varying data  size.  Cuckoo Filter improves performance for up to 100%.
+
+
+
+Fig.  6.  Lookup  performance  for  varying  query  result  positiveness  (that is, percentage of queries returning rows, as opposed to returning 0 rows). Performance of Cuckoo Filter is not worse than Bloom Filter.
+
+
+execution time decreases a bit. That is because the query execution time includes the data transfer time from the server to the client, and hence the lesser the data for transfer, the lesser query execution time becomes.
+We also experimented with lookup after deletion perfor- mance against varying data size, and from Fig. 5 it can be  seen that the more data is deleted, the more performance improvement Cuckoo filter achieves.
+2)	Lookup Performance in General: Fig. 6 shows the comparison result for varying the fraction of queries that return positive results, that is, return rows as opposed to resulting in 0 rows. Naturally, the more queries return positive results, the more data need to be transferred from server to
+
+
+
+Fig. 7.  Insertion performance for varying filter load (that is, how full the  filter is). Performance of Cuckoo Filter is not worse than Bloom Filter.
+
+
+client, hence the query execution time increases. But the query execution time for both the cases of Bloom Filter and Cuckoo Filter remains very similar, with Cuckoo Filter not causing  performance degradation of lookup queries in general.
+3)	Insertion Performance: Fig. 7 shows the result of our experiment with insertion query execution and it clearly shows that Cuckoo Filter performance is again equivalent to Bloom Filter, while being slightly better.
+VI.	CONCLUSIONS
+Improving query performance is one of the most challenging issues in Big Data. Several techniques have been proposed    to improve query performance in various directions. However, none of the techniques address the issue of performance degra- dation of lookup queries after data deletion in an Eventually Constistent Big Data system. This paper proposes a scheme that improves query performance significantly in that case. The scheme has been evaluated with a popular Big Data database (Cassandra) and it has been shown to improve performance of lookup queries after data deletion for up to 100%.
+REFERENCES
+[1]	P.     Vagata     and     K.     Wilfong,      “Scaling      the      Face- book     data     warehouse     to     300PB,”     April     2014.     [On- line]. Available: https://code.facebook.com/posts/229861827208629/ scaling-the-facebook-data-warehouse-to-300-pb [Accessed: Aug. 15, 2018].
+[2]	B. H. Bloom, “Space/time trade-offs in hash coding with allowable errors,” Communications of the ACM, vol. 13, no. 7, pp. 422–426, Jul. 1970.
+[3]	F. Chang, J. Dean, S. Ghemawat, W. C. Hsieh, D. A. Wallach, M. Bur- rows, T. Chandra, A. Fikes, and R. E. Gruber, “Bigtable: A distributed storage system for structured data,” ACM Transactions on Computer Systems, vol. 26, no. 2, pp. 4:1–4:26, Jun. 2008.
+[4]	M. Bhushan, S. Banerjea, and S. K. Yadav, “Bloom filter based opti- mization on HBase with MapReduce,” in Data Mining and Intelligent Computing, IEEE, Sept 2014, pp. 1–5.
+[5]	A. Lakshman and P. Malik, “Cassandra: A decentralized structured storage system,” ACM SIGOPS Operating Systems Review, vol. 44, no. 2, pp. 35–40, Apr. 2010.
+[6]	B. Fan, D. G. Andersen, M. Kaminsky, and M. D. Mitzenmacher, “Cuckoo Filter: Practically  better  than  Bloom,”  in  Proceedings  of the 10th ACM International on Conference on Emerging Networking Experiments and Technologies, ser. CoNEXT ’14. New  York,  NY, USA: ACM, 2014, pp. 75–88.
+[7]	J.   Frazier,   “Why   data   deletion   makes   sense   (and    dollars),” July 2015. [Online]. Available: http://www.ftijournal.com/article/ why-data-deletion-makes-sense-and-dollars [Accessed: Aug. 15, 2018].
+[8]	L. P. Perea and V. Inozemtsev, “From MySQL to Phoenix.” [Online]. Available: https://visual-meta.com/tech-corner/from-mysql-to-phoenix. html [Accessed: Aug. 15, 2018].
+
+[9]	M. Winand, “What every developer should know about SQL performance.” [Online]. Available: https://use-the-index-luke.com/sql/ dml/insert [Accessed: Aug. 15, 2018].
+[10]	T.  Lee, K. Kim, and H. J. Kim, “Join processing using Bloom filter      in MapReduce,” in Proceedings of the 2012 ACM Research in Applied Computation Symposium, ser. RACS ’12. New York, NY, USA: ACM, 2012, pp. 100–105.
+[11]	D. Guo, Y. Liu, X. Li, and P. Yang, “False negative problem of Counting Bloom Filter,” IEEE Transactions on Knowledge and Data Engineering, vol. 22, no. 5, pp. 651–664, May 2010.
+[12]	R. Pagh and F.  F.  Rodler, “Cuckoo hashing,” J. Algorithms, vol. 51,   no. 2, pp. 122–144, May 2004.
+[13]	L. Fan, P. Cao, J. Almeida, and A. Z. Broder, “Summary Cache: A scal- able wide-area web cache sharing protocol,” IEEE/ACM Transactions on Networking, vol. 8, no. 3, pp. 281–293, Jun. 2000.
+[14]	F. Bonomi, M. Mitzenmacher, R. Panigrahy, S. Singh, and G. Varghese, “An improved construction for Counting Bloom Filters,” in Proceedings of the 14th Conference on Annual European Symposium - Volume 14, ser. ESA’06. London, UK, UK: Springer-Verlag, 2006, pp. 684–695.
+[15]	C. E. Rothenberg, C. A. B. Macapuna, F. L. Verdi, and M. Magalhaes, “The Deletable Bloom Filter: A new member of the Bloom family,” IEEE Communications Letters, vol. 14, no. 6, pp. 557–559, June 2010.
+[16]	S. Tarkoma, C. E. Rothenberg, and E. Lagerspetz, “Theory and practice of Bloom filters for distributed systems,” IEEE Communications Surveys Tutorials, vol. 14, no. 1, pp. 131–155, First 2012.
+[17]	M. Kwon, P. Reviriego, and S. Pontarelli, “A  length-aware  Cuckoo filter for faster IP lookup,” in 2016 IEEE Conference on Computer Communications Workshops (INFOCOM WKSHPS), April 2016, pp. 1071–1072.
+[18]	J. Cui, J. Zhang, H. Zhong, and Y. Xu, “SPACF: A secure privacy- preserving authentication scheme for VANET with Cuckoo filter,” IEEE Transactions on Vehicular Technology, vol. 66, no. 11, pp. 10 283–    10 295, Nov 2017.
+[19]	V. V. Mahale, N. P. Pareek, and V. U. Uttarwar, “Alleviation of DDoS attack using advance technique,” in 2017 International Conference on Innovative Mechanisms for Industry Applications (ICIMIA), Feb 2017, pp. 172–176.
+[20]	M. Al-Hisnawi and M. Ahmadi, “Deep packet inspection using Cuckoo filter,” in 2017 Annual Conference on New Trends in Information Communications Technology Applications (NTICT), March 2017, pp. 197–202.
+[21]	M. Kwon, S. Vajpayee, P. Vijayaragavan, A. Dhuliya, and J. Marshall, “Use of Cuckoo filters with FD.Io VPP for software IPv6 routing lookup,” in Proceedings of the SIGCOMM Posters and Demos. ACM, 2017, pp. 127–129.
+[22]	K. Ren, Q. Zheng, J. Arulraj, and G. Gibson, “SlimDB: A space-efficient key-value storage engine for semi-sorted data,” Proc. VLDB Endow., vol. 10, no. 13, pp. 2037–2048, Sep. 2017.
+[23]	Q. Xue and M. C. Chuah, “Cuckoo-filter based privacy-aware search over encrypted cloud data,” in 2015 11th International Conference on Mobile Ad-hoc and Sensor Networks (MSN), Dec 2015, pp. 60–68.
+[24]	H. Chen, L. Liao, H. Jin, and J. Wu, “The Dynamic Cuckoo Filter,” in 2017 IEEE 25th International Conference on Network Protocols (ICNP), Oct 2017, pp. 1–10.
+[25]	Y. Sun, Y. Hua, S. Jiang, Q. Li, S. Cao, and P. Zuo, “SmartCuckoo: A fast and cost-efficient hashing index scheme for cloud storage systems,” in Proceedings of the 2017 USENIX Conference on Usenix Annual Technical Conference, ser. USENIX ATC ’17. Berkeley, CA, USA: USENIX Association, 2017, pp. 553–565.
+[26]	A. Kirsch, M. Mitzenmacher, and U. Wieder, “More robust hashing: Cuckoo hashing with a stash,” SIAM Journal on Computing, vol. 39,   no. 4, pp. 1543–1561, Dec. 2009.
+[27]	M. Mitzenmacher, S. Pontarelli, and P. Reviriego, “Adaptive Cuckoo filters,” in Proceedings of the Twentieth Workshop on Algorithm Engi- neering and Experiments, 2018, pp. 36–47.
+[28]	Z. Xie, W. Ding, H. Wang, Y. Xiao, and Z. Liu, “D-Ary Cuckoo Filter:  A space efficient data structure for set membership lookup,” in 2017 IEEE 23rd International Conference on Parallel and Distributed Systems (ICPADS), Dec 2017, pp. 190–197.
+[29]	J.  Casares,  “Multi-datacenter  replication  in   Cassandra,”   Novem-  ber 2012. [Online]. Available: https://www.datastax.com/dev/blog/ multi-datacenter-replication [Accessed: Aug. 15, 2018].

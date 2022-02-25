@@ -21,6 +21,7 @@ venv
 .env.production.local
 __pycache__
 database.db
+input.txt
 
 npm-debug.log*
 yarn-debug.log*

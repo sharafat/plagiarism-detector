@@ -1,6 +1,10 @@
+import os
+
 from flask import Flask, jsonify, request
 from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, get_jwt_identity, jwt_required
+from os.path import dirname, join
 from services.DB import DB
+from services.PlagiarismChecker import PlagiarismChecker
 
 app = Flask(__name__, static_folder='../build', static_url_path='/')
 
@@ -73,13 +77,26 @@ def check():
     if file is not None:
         document = file.read().decode("utf-8")
 
+    current_dir = dirname(__file__)
+    tmpFilePath = join(current_dir, "./input.txt")
+    tmpFile = open(tmpFilePath, "w")
+    tmpFile.write(document)
+    tmpFile.close()
+
+    reference_files = os.listdir(join(current_dir, './reference_docs'))
+    max_matching_probability = 0.0
+    for reference_file in reference_files:
+        checker = PlagiarismChecker(join(current_dir, './reference_docs/' + reference_file), tmpFilePath)
+        matching_probability = round(checker.get_rate(), 2)
+        if matching_probability > max_matching_probability:
+            max_matching_probability = matching_probability
+
     title = file.filename if file is not None else document[:20]
-    matching_probability = 0.0
     created_by = get_jwt_identity()
 
     db.insert(
         "INSERT INTO documents (title, document, matching_probability, created_by) VALUES (?, ?, ?, ?)",
-        (title, document, matching_probability, created_by)
+        (title, document, max_matching_probability, created_by)
     )
 
-    return jsonify({"matching_probability": matching_probability}), 200
+    return jsonify({"matching_probability": max_matching_probability}), 200

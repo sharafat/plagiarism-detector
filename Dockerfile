@@ -18,6 +18,7 @@ COPY --from=build-step /app/build ./build
 RUN mkdir ./api
 COPY api/requirements.txt api/api.py api/.flaskenv api/initdb.sql ./api/
 COPY api/services/ ./api/services/
+COPY api/reference_docs/ ./api/reference_docs/
 RUN pip install -r ./api/requirements.txt
 ENV FLASK_ENV production
 
