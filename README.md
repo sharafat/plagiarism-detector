@@ -19,8 +19,9 @@ This is a simple Python-Flusk-React application to detect plagiarism using Rabin
 
 ## Running tests with coverage
 1. Change directory to `plagiarism-detector/api`
-2. Run tests with coverage: `coverage run --source=api,services -m pytest && coverage report -m`
-3. Output should be like the following:
+2. Install the dependent modules: `pip3 install -r ./requirements.txt`
+3. Run tests with coverage: `coverage run --source=api,services -m pytest && coverage report -m`
+4. Output should be like the following:
 ```
 tests/test_apis.py .........                            [100%]
 
