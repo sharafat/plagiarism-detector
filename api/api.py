@@ -7,6 +7,7 @@ from services.DB import DB
 from services.PlagiarismChecker import PlagiarismChecker
 
 app = Flask(__name__, static_folder='../build', static_url_path='/')
+app.config["PROPAGATE_EXCEPTIONS"] = True
 
 # Setup the Flask-JWT-Extended extension
 app.config["JWT_SECRET_KEY"] = "7212baf2-3844-4aa5-8e7f-c1c77ede0be3"
@@ -19,11 +20,6 @@ db.init_db()
 
 @app.errorhandler(404)
 def not_found(e):
-    return app.send_static_file('index.html')
-
-
-@app.route('/')
-def index():
     return app.send_static_file('index.html')
 
 
@@ -71,7 +67,7 @@ def documents():
 def check():
     document = request.form.get("text")
     file = request.files.get("file")
-    if document == "" and file is None:
+    if document is None and file is None:
         return jsonify({"error": "text/file is required."}), 422
 
     if file is not None:

@@ -32,5 +32,5 @@ class RabinCarp:
             return True
         return False
 
-    def current_window_text(self):
-        return self.text[self.window_start:self.window_end]
+    # def current_window_text(self):
+    #     return self.text[self.window_start:self.window_end]
